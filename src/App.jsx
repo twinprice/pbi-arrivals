@@ -15,7 +15,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 const CONFIG = {
   TZ: "America/New_York",
   AUTO_REFRESH_SECONDS: 60,
-  AVIATIONSTACK_KEY: "PUT_YOUR_KEY_HERE", // https://aviationstack.com/
+  AVIATIONSTACK_KEY: "16ccb25a465d814f00f5a4b82d0c9455", // https://aviationstack.com/
   USE_AVIATIONSTACK: true, // set to false if you wire up AeroDataBox instead
   AERODATABOX_KEY: "", // if you prefer: https://rapidapi.com/aedbx-aedbx/api/aerodatabox
   AMTRAK_PROXY_URL: "", // optional. Your Apps Script or small proxy that returns train status JSON
