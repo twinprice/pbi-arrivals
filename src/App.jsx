@@ -18,7 +18,7 @@ const CONFIG = {
   AVIATIONSTACK_KEY: "16ccb25a465d814f00f5a4b82d0c9455", // https://aviationstack.com/
   USE_AVIATIONSTACK: true, // set to false if you wire up AeroDataBox instead
   AERODATABOX_KEY: "", // if you prefer: https://rapidapi.com/aedbx-aedbx/api/aerodatabox
-  AMTRAK_PROXY_URL: "", // optional. Your Apps Script or small proxy that returns train status JSON
+  AMTRAK_PROXY_URL: "https://script.google.com/macros/s/AKfycbyfnETT5pCbYae8oG9dQZEPTjh4t_1wC2YjhLgPl9JfOiFdkQcRe6rPJLt3BasSs0O5/exec", // optional. Your Apps Script or small proxy that returns train status JSON
 };
 
 // ======== DATA ========
