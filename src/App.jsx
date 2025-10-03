@@ -67,6 +67,11 @@ function fmtTime(dtStr, tz = CONFIG.TZ) {
     return "";
   }
 }
+function etaSource(item) {
+  if (item.arr_actual || item.arr_actual_runway) return "actual";
+  if (item.eta_live && item.eta_live !== item.eta_sched) return "est";
+  return "sched";
+}
 function fmtHM(dtStr, tz = CONFIG.TZ) {
   if (!dtStr) return "";
   try {
@@ -107,15 +112,12 @@ function playerPhotoPath(name) {
   return `${BASE}players/${s}`; // no extension here
 }
 
-function saneEta(schedISO, estISO) {
-  const sched = new Date(schedISO).getTime();
-  const est = new Date(estISO).getTime();
-  if (!Number.isFinite(est)) return null;
-  const diff = Math.abs(est - sched);
-  const within3h = diff <= 3 * 60 * 60 * 1000;
-  const nearEvent = Math.abs(Date.now() - sched) <= 12 * 60 * 60 * 1000;
-  return within3h && nearEvent ? estISO : null;
+function saneEta(_schedISO, estISO) {
+  const t = new Date(estISO).getTime();
+  return Number.isFinite(t) ? estISO : null;
 }
+
+
 function delayMinutes(item) {
   const live = item.eta_live || item.eta_sched;
   return diffMinutes(live, item.eta_sched); // positive means late, negative early
@@ -269,6 +271,16 @@ async function fetchFlightStatusAviationstack(airlineIata, flightNumber, schedIS
     }
 
     const payload = normalizeAviationstackJson(data, airlineIata, flightNumber);
+    // TEMP: debug what we're getting back
+    console.log("[flight]", flight, flightDate, {
+      status: payload.status,
+      eta_est: payload.eta_est,
+      arr_actual: payload.arr_actual,
+      arr_actual_runway: payload.arr_actual_runway,
+      dep_scheduled: payload.dep_scheduled,
+      dep_estimated: payload.dep_estimated,
+      dep_actual: payload.dep_actual
+    });
     if (!payload) {
       console.warn("aviationstack empty payload for", flight, flightDate, data);
       return null;
@@ -326,6 +338,8 @@ function RowCard({ item, onOpenExternal }) {
   const depTime = item.dep_estimated || item.dep_scheduled; // show estimated if present
   const etaLive = item.eta_live || item.eta_sched;
   const dm = delayMinutes(item); // positive late, negative early
+  const etaLive = item.eta_live || item.eta_sched;
+  const source = etaSource(item);   // ← add this
 
   return (
     <div className={`rounded-2xl shadow p-4 flex items-center gap-4 border ${rowEmphasis(item)}`}>
@@ -349,25 +363,31 @@ function RowCard({ item, onOpenExternal }) {
         <div className="text-sm text-gray-600">
           {item.type === "flight" ? `${item.airline_code}${item.flight_number}` : `Train ${item.train_number}`} • From {item.origin_city}
         </div>
-
         <div className="text-sm mt-1">
           {depTime && (
             <span className="mr-3">
               Departs: <span className="font-medium">{fmtHM(depTime)}</span>
             </span>
           )}
+        
           <span className="mr-3">
             ETA scheduled: <span className="font-medium">{fmtHM(item.eta_sched)}</span>
           </span>
+        
           <span className="mr-3">
             Live: <span className="font-medium">{fmtHM(etaLive)}</span>
+            <span className="ml-1 px-2 py-0.5 text-xs rounded-full bg-gray-200 align-middle">
+              {etaSource(item)}
+            </span>
           </span>
+        
           {showMinutes && (
             <span className={`${mins < 0 ? "text-gray-500" : mins <= 20 ? "text-red-600" : "text-gray-800"}`}>
               {mins < 0 ? `${Math.abs(mins)} min ago` : `in ${mins} min`}
             </span>
           )}
-        </div>
+</div>
+
 
         <div className="text-xs text-gray-600 mt-1 flex flex-wrap gap-x-4 gap-y-1">
           {Number.isFinite(item.dep_delay_min) && <span>Dep delay: <span className="font-medium">{item.dep_delay_min}m</span></span>}
