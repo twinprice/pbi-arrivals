@@ -8,13 +8,15 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 
 const CONFIG = {
   TZ: "America/New_York",
-  AUTO_REFRESH_SECONDS: 180,            // 3 minutes
-  CACHE_SECONDS: 180,                   // cache live lookups for 3 minutes
+  AUTO_REFRESH_SECONDS: 180,
+  CACHE_SECONDS: 180,
   AVIATIONSTACK_KEY: "16ccb25a465d814f00f5a4b82d0c9455",
   USE_AVIATIONSTACK: true,
   AERODATABOX_KEY: "",
   AMTRAK_PROXY_URL: "",
-  AVIATIONSTACK_PROXY_URL: "https://script.google.com/macros/s/AKfycbyqIjzOgKRMWVmNKt-R4o0egAuiPKPFvDCYnBP3s65g9hJ8h2lgKDmnmJFs-pbCgcVe/exec",
+  AVIATIONSTACK_PROXY_URL: "", // <= IMPORTANT: disable proxy
+};
+
 
 };
 // Safe base for GitHub Pages project site
@@ -242,23 +244,33 @@ async function fetchFlightStatusAviationstack(airlineIata, flightNumber, schedIS
   const hit = readFromCacheIfFresh(flight, flightDate, CONFIG.CACHE_SECONDS);
   if (hit) return hit;
 
-  // 2) build URL, proxy if present
-  const base = CONFIG.AVIATIONSTACK_PROXY_URL
-    ? `${CONFIG.AVIATIONSTACK_PROXY_URL}?flight=${encodeURIComponent(flight)}&date=${encodeURIComponent(flightDate)}`
-    : `https://api.aviationstack.com/v1/flights?access_key=${encodeURIComponent(CONFIG.AVIATIONSTACK_KEY)}&flight_iata=${encodeURIComponent(flight)}&flight_date=${encodeURIComponent(flightDate)}`;
+  // 2) direct request to Aviationstack
+  const url =
+    `https://api.aviationstack.com/v1/flights` +
+    `?access_key=${encodeURIComponent(CONFIG.AVIATIONSTACK_KEY)}` +
+    `&flight_iata=${encodeURIComponent(flight)}` +
+    `&flight_date=${encodeURIComponent(flightDate)}`;
 
   try {
-    const res = await fetch(base);
-    if (!res.ok) throw new Error(`flight fetch failed ${res.status}`);
-
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.error("aviationstack http error", res.status, await res.text());
+      return null;
+    }
     const data = await res.json();
 
-    // 3) normalize
-    const payload = CONFIG.AVIATIONSTACK_PROXY_URL
-      ? data
-      : normalizeAviationstackJson(data, airlineIata, flightNumber);
+    // Surface API-side errors
+    if (data && data.error) {
+      console.error("aviationstack API error:", data.error);
+      return null;
+    }
 
-    // 4) write cache and return
+    const payload = normalizeAviationstackJson(data, airlineIata, flightNumber);
+    if (!payload) {
+      console.warn("aviationstack empty payload for", flight, flightDate, data);
+      return null;
+    }
+
     writeCacheFor(flight, flightDate, payload);
     return payload;
   } catch (e) {
@@ -266,6 +278,7 @@ async function fetchFlightStatusAviationstack(airlineIata, flightNumber, schedIS
     return null;
   }
 }
+
 
 
 async function fetchStatusForRow(row) {
@@ -494,10 +507,12 @@ export default function App() {
             <button onClick={refresh} className="px-3 py-2 rounded-xl bg-black text-white text-sm disabled:opacity-50" disabled={loading}>
               {loading ? "Refreshing" : "Refresh"}
             </button>
-           <button
-              onClick={() => clearCacheAndRefresh(setRows, refresh)}
+            <button
+              onClick={() => {
+                localStorage.removeItem("flightCacheV2");
+                location.reload(); // force fresh network calls
+              }}
               className="px-3 py-2 rounded-xl border text-sm"
-              disabled={loading}
             >
               Clear cache
             </button>
