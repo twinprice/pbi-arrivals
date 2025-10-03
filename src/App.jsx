@@ -142,38 +142,98 @@ function rowEmphasis(item) {
 }
 
 // ======== CACHE (localStorage) ========
-const cacheKey = "flightCacheV1";
-function readCache() {
-  try { return JSON.parse(localStorage.getItem(cacheKey) || "{}"); } catch { return {}; }
+const cacheKey = "flightCacheV2"
+
+function readCacheObj() {
+  try { return JSON.parse(localStorage.getItem(cacheKey) || "{}") } catch { return {} }
 }
-function writeCache(obj) {
-  localStorage.setItem(cacheKey, JSON.stringify(obj));
+function writeCacheObj(obj) {
+  localStorage.setItem(cacheKey, JSON.stringify(obj))
+}
+
+function cacheKeyFor(flight, flightDate) {
+  return `${flight}-${flightDate}`
+}
+function readFromCacheIfFresh(flight, flightDate, maxAgeSec = CONFIG.CACHE_SECONDS) {
+  const all = readCacheObj()
+  const entry = all[cacheKeyFor(flight, flightDate)]
+  if (!entry) return null
+  if (Date.now() - entry.ts > maxAgeSec * 1000) return null
+  return entry.payload
+}
+function writeCacheFor(flight, flightDate, payload) {
+  const all = readCacheObj()
+  all[cacheKeyFor(flight, flightDate)] = { ts: Date.now(), payload }
+  writeCacheObj(all)
 }
 
 // ======== API FETCHERS ========
+function normalizeAviationstackJson(raw) {
+  const item = raw && raw.data && raw.data[0]
+  if (!item) return null
+
+  const dep = item.departure || {}
+  const arr = item.arrival || {}
+  const airline = item.airline || {}
+  const flight = item.flight || {}
+  const aircraft = item.aircraft || {}
+
+  const etaEst = arr.estimated || arr.estimated_runway || arr.scheduled || null
+
+  return {
+    status: item.flight_status || null,
+    eta_est: etaEst,
+    dep_scheduled: dep.scheduled || null,
+    dep_estimated: dep.estimated || null,
+    dep_actual: dep.actual || null,
+    dep_delay_min: Number.isFinite(dep.delay) ? dep.delay : null,
+    arr_terminal: arr.terminal || null,
+    arr_gate: arr.gate || null,
+    arr_baggage: arr.baggage || null,
+    airline_name: airline.name || null,
+    aircraft_reg: aircraft.registration || null,
+    flight_iata: flight.iata || null
+  }
+}
+async function fetchTrainStatus(trainNumber) {
+  if (!CONFIG.AMTRAK_PROXY_URL) return null
+  try {
+    const res = await fetch(`${CONFIG.AMTRAK_PROXY_URL}?train=${encodeURIComponent(trainNumber)}`)
+    if (!res.ok) throw new Error("amtrak proxy http error")
+    return await res.json()   // expects { status, eta_est }
+  } catch (e) {
+    console.error("Train status fetch failed:", e)
+    return null
+  }
+}
+
 async function fetchFlightStatusAviationstack(airlineIata, flightNumber, schedISO) {
-  const d = new Date(schedISO);
-  const flightDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  const flight = `${airlineIata}${flightNumber}`;
+  const d = new Date(schedISO)
+  const flightDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  const flight = `${airlineIata}${flightNumber}`
 
-  const hit = readFromCacheIfFresh(flight, flightDate); // your existing cache logic
-  if (hit) return hit;
+  const cached = readFromCacheIfFresh(flight, flightDate)
+  if (cached) return cached
 
-  const base = CONFIG.AVIATIONSTACK_PROXY_URL
+  const usingProxy = !!CONFIG.AVIATIONSTACK_PROXY_URL
+  const base = usingProxy
     ? CONFIG.AVIATIONSTACK_PROXY_URL
-    : `https://api.aviationstack.com/v1/flights?access_key=${CONFIG.AVIATIONSTACK_KEY}`;
-  const url = CONFIG.AVIATIONSTACK_PROXY_URL
+    : `https://api.aviationstack.com/v1/flights?access_key=${CONFIG.AVIATIONSTACK_KEY}`
+
+  const url = usingProxy
     ? `${base}?flight=${encodeURIComponent(flight)}&date=${encodeURIComponent(flightDate)}`
-    : `${base}&flight_iata=${encodeURIComponent(flight)}&flight_date=${encodeURIComponent(flightDate)}`;
+    : `${base}&flight_iata=${encodeURIComponent(flight)}&flight_date=${encodeURIComponent(flightDate)}`
 
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('flight fetch failed');
-  const data = await res.json();
+  const res = await fetch(url)
+  if (!res.ok) throw new Error("flight fetch failed")
+  const data = await res.json()
 
-  // If proxy in use we already normalized the shape above
-  const payload = CONFIG.AVIATIONSTACK_PROXY_URL ? data : normalizeAviationstackJson(data);
-  writeCacheFor(flight, flightDate, payload);
-  return payload;
+  const payload = usingProxy ? data : normalizeAviationstackJson(data)
+  if (usingProxy) console.log("proxy flight payload", { url, payload })
+  if (!payload) return null
+
+  writeCacheFor(flight, flightDate, payload)
+  return payload
 }
 
 
@@ -326,12 +386,18 @@ export default function App() {
           const ok = saneEta(r.eta_sched, live.eta_est);
           if (ok) eta = ok;
         }
-
+        
         const statusNorm = normalizeStatus(live.status, r.type);
-        const finalStatus =
-          statusNorm === "Landed" && new Date(eta).getTime() > Date.now()
-            ? "En route"
-            : statusNorm;
+        
+        // infer en route if departed already
+        const depGuess = live.dep_actual || live.dep_estimated;
+        const depHasGone = depGuess && new Date(depGuess).getTime() <= Date.now() - 5 * 60 * 1000;
+        
+        let finalStatus = statusNorm;
+        if (statusNorm === "Scheduled" && depHasGone) finalStatus = "En route";
+        
+        // do not show Landed if ETA is in the future
+        if (finalStatus === "Landed" && new Date(eta).getTime() > Date.now()) finalStatus = "En route";
 
         return {
           ...r,
