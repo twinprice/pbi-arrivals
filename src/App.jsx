@@ -162,7 +162,7 @@ function rowEmphasis(item) {
   if (s.includes("cancel")) return "border-red-400 bg-red-50";
   if (s.includes("landed") || s.includes("arrived")) return "border-green-100";
   return "border-gray-200";
-} no
+}
 // ======== UI ========
 function StatusPill({ text }) {
   return (
