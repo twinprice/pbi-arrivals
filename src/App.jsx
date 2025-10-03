@@ -14,6 +14,8 @@ const CONFIG = {
   USE_AVIATIONSTACK: true,
   AERODATABOX_KEY: "",
   AMTRAK_PROXY_URL: "",
+  AVIATIONSTACK_PROXY_URL: "https://script.google.com/macros/s/AKfycbyEYs5fvoxW7k6ZEbsJDzhHhRtbgrfmHmA7XuZDFt64HaihKwAYBmOFXeh8zqjSEnwq/exec",
+
 };
 // Safe base for GitHub Pages project site
 const BASE =
@@ -124,14 +126,13 @@ function isDelayed(item) {
   return delayMinutes(item) >= 10;
 }
 function punctualLabel(item) {
-  const dm = delayMinutes(item);
-  if (!item.eta_live || Math.abs(dm) > 180) {
-    return { text: "On time", cls: "bg-green-100 text-green-800" };
-  }
-  if (dm >= 10) return { text: `Delayed ${dm}m`, cls: "bg-red-100 text-red-800" };
+  if (!item.eta_live) return { text: "On time", cls: "bg-green-100 text-green-800" };
+  const dm = Math.max(-180, Math.min(180, delayMinutes(item))); // clamp ±180
+  if (dm >= 10)  return { text: `Delayed ${dm}m`, cls: "bg-red-100 text-red-800" };
   if (dm <= -10) return { text: `Early ${Math.abs(dm)}m`, cls: "bg-green-100 text-green-800" };
   return { text: "On time", cls: "bg-green-100 text-green-800" };
 }
+
 function rowEmphasis(item) {
   if (isDelayed(item)) return "border-red-300 bg-red-50";
   const s = String(item.status || "").toLowerCase();
@@ -151,68 +152,40 @@ function writeCache(obj) {
 
 // ======== API FETCHERS ========
 async function fetchFlightStatusAviationstack(airlineIata, flightNumber, schedISO) {
-  if (!CONFIG.AVIATIONSTACK_KEY) return null;
-
-  // cache by airline, number, date
   const d = new Date(schedISO);
-  const flightDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  const key = `${airlineIata}${flightNumber}-${flightDate}`;
+  const flightDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const iata = `${airlineIata}${flightNumber}`;
 
-  const cache = readCache();
-  const hit = cache[key];
-  if (hit && Date.now() - hit.ts < CONFIG.CACHE_SECONDS * 1000) {
-    return hit.payload;
-  }
+  // cache key unchanged...
+  // use proxy
+  const url = `${CONFIG.AVIATIONSTACK_PROXY_URL}?flight=${encodeURIComponent(iata)}&date=${encodeURIComponent(flightDate)}`;
 
-  const url =
-    `https://api.aviationstack.com/v1/flights?` +
-    `access_key=${CONFIG.AVIATIONSTACK_KEY}` +
-    `&flight_iata=${airlineIata}${flightNumber}` +
-    `&flight_date=${flightDate}`;
+  const res = await fetch(url);
+  if (!res.ok) return null;
+  const data = await res.json();
+  const item = data?.data?.[0];
+  if (!item) return null;
 
-  try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("aviationstack http error");
-    const data = await res.json();
-    const item = data?.data?.[0];
-    if (!item) return null;
+  const dep = item.departure || {};
+  const arr = item.arrival || {};
+  const airline = item.airline || {};
+  const aircraft = item.aircraft || {};
+  const etaEst = arr.estimated || arr.estimated_runway || arr.scheduled || null;
 
-    // pull extra fields
-    const stat = item.flight_status;
-    const dep = item.departure || {};
-    const arr = item.arrival || {};
-    const airline = item.airline || {};
-    const flight = item.flight || {};
-    const aircraft = item.aircraft || {};
-
-    const etaEst =
-      arr.estimated ||
-      arr.estimated_runway ||
-      arr.scheduled ||
-      null;
-
-    const payload = {
-      status: stat,
-      eta_est: etaEst,
-      dep_scheduled: dep.scheduled || null,
-      dep_estimated: dep.estimated || null,
-      dep_actual: dep.actual || null,
-      dep_delay_min: Number.isFinite(dep.delay) ? dep.delay : null,
-      arr_terminal: arr.terminal || null,
-      arr_gate: arr.gate || null,
-      arr_baggage: arr.baggage || null,
-      airline_name: airline.name || null,
-      aircraft_reg: aircraft.registration || null,
-      flight_iata: flight.iata || `${airlineIata}${flightNumber}`,
-    };
-
-    cache[key] = { ts: Date.now(), payload };
-    writeCache(cache);
-    return payload;
-  } catch (e) {
-    console.error(e);
-    return null;
-  }
+  return {
+    status: item.flight_status,
+    eta_est: etaEst,
+    dep_scheduled: dep.scheduled || null,
+    dep_estimated: dep.estimated || null,
+    dep_actual: dep.actual || null,
+    dep_delay_min: Number.isFinite(dep.delay) ? dep.delay : null,
+    arr_terminal: arr.terminal || null,
+    arr_gate: arr.gate || null,
+    arr_baggage: arr.baggage || null,
+    airline_name: airline.name || null,
+    aircraft_reg: aircraft.registration || null,
+    flight_iata: item.flight?.iata || iata,
+  };
 }
 
 async function fetchTrainStatus(trainNumber) {
