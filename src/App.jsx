@@ -150,6 +150,31 @@ function readCacheObj() {
 function writeCacheObj(obj) {
   localStorage.setItem(cacheKey, JSON.stringify(obj))
 }
+function clearCacheAndRefresh(setRows, refresh) {
+  try {
+    localStorage.removeItem(cacheKey);
+    setRows(prev =>
+      prev.map(r => ({
+        ...r,
+        eta_live: undefined,
+        dep_scheduled: undefined,
+        dep_estimated: undefined,
+        dep_actual: undefined,
+        dep_delay_min: undefined,
+        arr_terminal: undefined,
+        arr_gate: undefined,
+        arr_baggage: undefined,
+        airline_name: undefined,
+        aircraft_reg: undefined,
+        flight_iata: undefined,
+        status: r.status || "Scheduled"
+      }))
+    );
+  } catch (e) {
+    console.error("cache clear failed", e);
+  }
+  refresh();
+}
 
 function cacheKeyFor(flight, flightDate) {
   return `${flight}-${flightDate}`
@@ -463,13 +488,14 @@ export default function App() {
             <button onClick={refresh} className="px-3 py-2 rounded-xl bg-black text-white text-sm disabled:opacity-50" disabled={loading}>
               {loading ? "Refreshing" : "Refresh"}
             </button>
-            <button
-              onClick={() => { localStorage.removeItem("flightCacheV1"); }}
+           <button
+              onClick={() => clearCacheAndRefresh(setRows, refresh)}
               className="px-3 py-2 rounded-xl border text-sm"
               disabled={loading}
             >
               Clear cache
             </button>
+
             <span className="text-xs text-gray-500">Updated {timeAgo(lastRefreshed.current)}</span>
           </div>
         </header>
