@@ -178,9 +178,16 @@ export default function App() {
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-6xl mx-auto">
         <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl font-bold">PBI Live Arrivals Board</h1>
-            <p className="text-sm text-gray-600">Richmond, VA • Times shown in {CONFIG.TZ}</p>
+          <div className="flex items-center gap-3">
+            <img
+              src="https://ussq-img-live.s3.amazonaws.com/uploads%2F42b7d345-c792-404a-af51-25bba6ccc775_file.png"
+              alt="PBI Logo"
+              className="h-12 w-auto"
+            />
+            <div>
+              <h1 className="text-2xl font-bold">PBI Live Arrivals Board</h1>
+              <p className="text-sm text-gray-600">Richmond, VA • Times shown in {CONFIG.TZ}</p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={refresh} className="px-3 py-2 rounded-xl bg-black text-white text-sm disabled:opacity-50" disabled={loading}>
