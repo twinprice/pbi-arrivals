@@ -137,7 +137,33 @@ async function fetchStatusForRow(row) {
   }
   return null;
 }
+function delayMinutes(item) {
+  const sched = new Date(item.eta_sched).getTime();
+  const live = new Date(item.eta_live || item.eta_sched).getTime();
+  return Math.round((live - sched) / 60000);
+}
 
+function isDelayed(item) {
+  const s = String(item.status || "").toLowerCase();
+  if (s.includes("delayed") || s.includes("late")) return true;
+  return delayMinutes(item) >= 10;
+}
+
+function punctualLabel(item) {
+  if (isDelayed(item)) return { text: `Delayed ${delayMinutes(item)}m`, cls: "bg-red-100 text-red-800" };
+  // treat small early or late swings as on time
+  const dm = delayMinutes(item);
+  if (dm <= -10) return { text: `Early ${Math.abs(dm)}m`, cls: "bg-green-100 text-green-800" };
+  return { text: "On time", cls: "bg-green-100 text-green-800" };
+}
+
+function rowEmphasis(item) {
+  if (isDelayed(item)) return "border-red-300 bg-red-50";
+  const s = String(item.status || "").toLowerCase();
+  if (s.includes("cancel")) return "border-red-400 bg-red-50";
+  if (s.includes("landed") || s.includes("arrived")) return "border-green-100";
+  return "border-gray-200";
+} no
 // ======== UI ========
 function StatusPill({ text }) {
   return (
@@ -149,17 +175,23 @@ function StatusPill({ text }) {
 
 function RowCard({ item, onOpenExternal }) {
   const mins = minsUntil(item.eta_live || item.eta_sched);
-  const showMinutes = Number.isFinite(mins) && Math.abs(mins) <= 600; // hide absurd numbers
+  const showMinutes = Number.isFinite(mins) && Math.abs(mins) <= 600;
+  const punctual = punctualLabel(item);
 
   return (
-    <div className="bg-white rounded-2xl shadow p-4 flex items-center gap-4">
+    <div className={`rounded-2xl shadow p-4 flex items-center gap-4 border ${rowEmphasis(item)}`}>
       <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-xl">
         {item.type === "flight" ? "✈️" : "🚆"}
       </div>
       <div className="flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <div className="text-lg font-semibold">{item.display_name}</div>
-          <StatusPill text={item.status} />
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${badgeColor(item.status)}`}>
+            {item.status || "Unknown"}
+          </span>
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${punctual.cls}`}>
+            {punctual.text}
+          </span>
         </div>
         <div className="text-sm text-gray-600">
           {item.type === "flight" ? `${item.airline_code}${item.flight_number}` : `Train ${item.train_number}`} • From {item.origin_city}
@@ -186,7 +218,6 @@ function RowCard({ item, onOpenExternal }) {
     </div>
   );
 }
-
 export default function App() {
   const [rows, setRows] = useState(RAW);
   const [loading, setLoading] = useState(false);
