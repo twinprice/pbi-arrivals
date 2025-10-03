@@ -15,6 +15,8 @@ const CONFIG = {
   AERODATABOX_KEY: "",
   AMTRAK_PROXY_URL: "",
 };
+// Correct base for GitHub Pages
+const BASE = (import.meta && import.meta.env && import.meta.env.BASE_URL) ? import.meta.env.BASE_URL : "/";
 
 // ======== DATA ========
 // Optional "photo" lets you point to a headshot. If absent, we try players/<slug>.jpg.
@@ -91,11 +93,15 @@ function slug(s) {
   return String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
 function airlineLogoPath(iata) {
-  return `/logos/${(iata || "").toUpperCase()}.png`; // put DL.png, AA.png into public/logos
+  const code = String(iata || "").toUpperCase();
+  return `${BASE}logos/${code}`; // no extension here
 }
+
 function playerPhotoPath(name) {
-  return `/players/${slug(name)}.jpg`; // or .png if you prefer. See notes below.
+  const s = slug(name);
+  return `${BASE}players/${s}`; // no extension here
 }
+
 function saneEta(schedISO, estISO) {
   const sched = new Date(schedISO).getTime();
   const est = new Date(estISO).getTime();
@@ -228,6 +234,24 @@ async function fetchStatusForRow(row) {
   }
   return null;
 }
+import { useState } from "react";
+
+function LogoImg({ iata, className = "h-5 w-auto" }) {
+  if (!iata) return null;
+  const stem = airlineLogoPath(iata);
+  const srcs = [`${stem}.svg`, `${stem}.png`, `${stem}.webp`];
+  const [i, setI] = useState(0);
+  if (i >= srcs.length) return null;
+  return <img src={srcs[i]} alt="" className={className} onError={() => setI(i + 1)} />;
+}
+
+function PlayerImg({ name, className = "w-12 h-12 rounded-xl object-cover bg-gray-100 hidden sm:block" }) {
+  const stem = playerPhotoPath(name);
+  const srcs = [`${stem}.webp`, `${stem}.jpg`, `${stem}.jpeg`, `${stem}.png`];
+  const [i, setI] = useState(0);
+  if (i >= srcs.length) return null;
+  return <img src={srcs[i]} alt="" className={className} onError={() => setI(i + 1)} />;
+}
 
 // ======== UI ========
 function StatusPill({ text }) {
@@ -244,24 +268,24 @@ function RowCard({ item, onOpenExternal }) {
   const showMinutes = Number.isFinite(mins) && Math.abs(mins) <= 600;
   const punctual = punctualLabel(item);
 
-  const photoSrc = item.photo || playerPhotoPath(item.display_name);
-  const logoSrc = item.logo || airlineLogoPath(item.airline_code);
-
   const depTime = item.dep_estimated || item.dep_scheduled; // show estimated if present
   const etaLive = item.eta_live || item.eta_sched;
-
   const dm = delayMinutes(item); // positive late, negative early
 
   return (
     <div className={`rounded-2xl shadow p-4 flex items-center gap-4 border ${rowEmphasis(item)}`}>
-      <img src={photoSrc} alt="" className="w-12 h-12 rounded-xl object-cover bg-gray-100 hidden sm:block" onError={(e)=>{e.currentTarget.style.display='none'}} />
+      {/* player photo with extension fallbacks and correct base path */}
+      <PlayerImg name={item.display_name} className="w-12 h-12 rounded-xl object-cover bg-gray-100 hidden sm:block" />
+
+      {/* emoji icon only on small screens */}
       <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-xl sm:hidden">
         {item.type === "flight" ? "✈️" : "🚆"}
       </div>
 
       <div className="flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <img src={logoSrc} alt="" className="h-5 w-auto" onError={(e)=>{e.currentTarget.style.display='none'}} />
+          {/* airline logo with extension fallbacks and correct base path */}
+          <LogoImg iata={item.airline_code} className="h-5 w-auto" />
           <div className="text-lg font-semibold">{item.display_name}</div>
           <StatusPill text={item.status} />
           <span className={`px-2 py-1 rounded-full text-xs font-medium ${punctual.cls}`}>{punctual.text}</span>
@@ -312,6 +336,7 @@ function RowCard({ item, onOpenExternal }) {
     </div>
   );
 }
+
 
 export default function App() {
   const [rows, setRows] = useState(RAW.map(r => ({ ...r, status: r.status || "Scheduled" })));
