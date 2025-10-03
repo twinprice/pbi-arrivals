@@ -421,32 +421,6 @@ function RowCard({ item, onOpenExternal }) {
 }
 
 
-
-
-        <div className="text-xs text-gray-600 mt-1 flex flex-wrap gap-x-4 gap-y-1">
-          {Number.isFinite(item.dep_delay_min) && <span>Dep delay: <span className="font-medium">{item.dep_delay_min}m</span></span>}
-          {Number.isFinite(dm) && Math.abs(dm) <= 180 && <span>Arr delta: <span className="font-medium">{dm >= 0 ? `+${dm}m` : `${dm}m`}</span></span>}
-          {(item.arr_terminal || item.arr_gate) && <span>Gate: <span className="font-medium">{[item.arr_terminal, item.arr_gate].filter(Boolean).join(" ")}</span></span>}
-          {item.arr_baggage && <span>Baggage: <span className="font-medium">{item.arr_baggage}</span></span>}
-          {item.aircraft_reg && <span>Reg: <span className="font-medium">{item.aircraft_reg}</span></span>}
-        </div>
-
-        {item.notes && <div className="text-xs text-gray-500 mt-1">{item.notes}</div>}
-      </div>
-
-      <div className="text-right">
-        <div className="text-sm">Pickup: <span className="font-medium">{item.pickup}</span></div>
-        {item.type === "train" && (
-          <button onClick={() => onOpenExternal(item)} className="mt-2 text-xs underline text-blue-700">
-            Open train status
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-
 export default function App() {
   const [rows, setRows] = useState(RAW.map(r => ({ ...r, status: r.status || "Scheduled" })));
   const [loading, setLoading] = useState(false);
