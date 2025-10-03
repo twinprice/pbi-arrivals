@@ -211,25 +211,30 @@ function normalizeAviationstackJson(apiJson, airlineIata, flightNumber) {
 
   const dep = it.departure || {};
   const arr = it.arrival || {};
-  const airline = it.airline || {};
-  const flight = it.flight || {};
-  const aircraft = it.aircraft || {};
 
   const etaEst = arr.estimated || arr.estimated_runway || arr.scheduled || null;
 
   return {
     status: it.flight_status || "Scheduled",
     eta_est: etaEst,
+
+    // departures
     dep_scheduled: dep.scheduled || null,
     dep_estimated: dep.estimated || null,
     dep_actual: dep.actual || null,
     dep_delay_min: typeof dep.delay === "number" ? dep.delay : null,
+
+    // arrivals (include ACTUALS!)
     arr_terminal: arr.terminal || null,
     arr_gate: arr.gate || null,
     arr_baggage: arr.baggage || null,
-    airline_name: airline.name || null,
-    aircraft_reg: aircraft.registration || null,
-    flight_iata: flight.iata || `${airlineIata}${flightNumber}`,
+    arr_actual: arr.actual || null,
+    arr_actual_runway: arr.actual_runway || null,
+
+    // misc
+    airline_name: (it.airline && it.airline.name) || null,
+    aircraft_reg: (it.aircraft && it.aircraft.registration) || null,
+    flight_iata: (it.flight && it.flight.iata) || `${airlineIata}${flightNumber}`,
   };
 }
 
@@ -412,31 +417,49 @@ export default function App() {
     });
   }, [rows, query, pickup, onlyActive]);
 
-  async function refresh() {
-    setLoading(true);
-    const updated = await Promise.all(
-      rows.map(async (r) => {
+async function refresh() {
+  setLoading(true);
+  const updated = await Promise.all(
+    rows.map(async (r) => {
+      try {
         const live = await fetchStatusForRow(r);
         if (!live) return r;
 
-        // choose a sane ETA
+        // ETA priority: actual > estimated(if sane) > scheduled
         let eta = r.eta_sched;
-        if (live.eta_est) {
+        const actualArr = live.arr_actual || live.arr_actual_runway;
+        if (actualArr) {
+          eta = actualArr;
+        } else if (live.eta_est) {
           const ok = saneEta(r.eta_sched, live.eta_est);
           if (ok) eta = ok;
         }
-        
+
         const statusNorm = normalizeStatus(live.status, r.type);
-        
-        // infer en route if departed already
+
+        const hasLanded =
+          !!actualArr &&
+          Number.isFinite(new Date(actualArr).getTime()) &&
+          new Date(actualArr).getTime() <= Date.now();
+
         const depGuess = live.dep_actual || live.dep_estimated;
-        const depHasGone = depGuess && new Date(depGuess).getTime() <= Date.now() - 5 * 60 * 1000;
-        
+        const depHasGone =
+          !!depGuess &&
+          Number.isFinite(new Date(depGuess).getTime()) &&
+          new Date(depGuess).getTime() <= Date.now() - 5 * 60 * 1000;
+
         let finalStatus = statusNorm;
-        if (statusNorm === "Scheduled" && depHasGone) finalStatus = "En route";
-        
-        // do not show Landed if ETA is in the future
-        if (finalStatus === "Landed" && new Date(eta).getTime() > Date.now()) finalStatus = "En route";
+        if (hasLanded) {
+          finalStatus = r.type === "flight" ? "Landed" : "Arrived";
+        } else if (statusNorm === "Scheduled" && depHasGone) {
+          finalStatus = "En route";
+        }
+
+        // Only flip Landed->En route if we *don't* have an actual
+        const etaMs = new Date(eta).getTime();
+        if (!hasLanded && finalStatus === "Landed" && Number.isFinite(etaMs) && etaMs > Date.now()) {
+          finalStatus = "En route";
+        }
 
         return {
           ...r,
@@ -449,23 +472,22 @@ export default function App() {
           arr_terminal: live.arr_terminal ?? r.arr_terminal,
           arr_gate: live.arr_gate ?? r.arr_gate,
           arr_baggage: live.arr_baggage ?? r.arr_baggage,
+          arr_actual: live.arr_actual ?? r.arr_actual,
+          arr_actual_runway: live.arr_actual_runway ?? r.arr_actual_runway,
           airline_name: live.airline_name ?? r.airline_name,
           aircraft_reg: live.aircraft_reg ?? r.aircraft_reg,
           flight_iata: live.flight_iata ?? r.flight_iata,
         };
-      })
-    );
-    setRows(updated);
-    lastRefreshed.current = Date.now();
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    const first = setTimeout(refresh, Math.random() * 2000); // small jitter
-    const id = setInterval(refresh, CONFIG.AUTO_REFRESH_SECONDS * 1000 + Math.floor(Math.random() * 2000));
-    return () => { clearTimeout(first); clearInterval(id); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+      } catch (e) {
+        console.error("row refresh failed", r.id, e);
+        return r; // keep existing data for this row
+      }
+    })
+  );
+  setRows(updated);
+  lastRefreshed.current = Date.now();
+  setLoading(false);
+}
 
   function normalizeStatus(status, type) {
     if (!status) return "Scheduled";
