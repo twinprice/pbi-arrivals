@@ -193,33 +193,7 @@ function writeCacheFor(flight, flightDate, payload) {
 }
 
 // ======== API FETCHERS ========
-function normalizeAviationstackJson(raw) {
-  const item = raw && raw.data && raw.data[0]
-  if (!item) return null
 
-  const dep = item.departure || {}
-  const arr = item.arrival || {}
-  const airline = item.airline || {}
-  const flight = item.flight || {}
-  const aircraft = item.aircraft || {}
-
-  const etaEst = arr.estimated || arr.estimated_runway || arr.scheduled || null
-
-  return {
-    status: item.flight_status || null,
-    eta_est: etaEst,
-    dep_scheduled: dep.scheduled || null,
-    dep_estimated: dep.estimated || null,
-    dep_actual: dep.actual || null,
-    dep_delay_min: Number.isFinite(dep.delay) ? dep.delay : null,
-    arr_terminal: arr.terminal || null,
-    arr_gate: arr.gate || null,
-    arr_baggage: arr.baggage || null,
-    airline_name: airline.name || null,
-    aircraft_reg: aircraft.registration || null,
-    flight_iata: flight.iata || null
-  }
-}
 async function fetchTrainStatus(trainNumber) {
   if (!CONFIG.AMTRAK_PROXY_URL) return null
   try {
