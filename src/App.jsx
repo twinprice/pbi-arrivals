@@ -149,9 +149,14 @@ function isDelayed(item) {
 }
 
 function punctualLabel(item) {
-  if (isDelayed(item)) return { text: `Delayed ${delayMinutes(item)}m`, cls: "bg-red-100 text-red-800" };
-  // treat small early or late swings as on time
-  const dm = delayMinutes(item);
+  const dm = delayMinutes(item); // may be negative if early
+
+  // If we did not accept a live ETA, treat as On time
+  if (!item.eta_live || Math.abs(dm) > 180) {
+    return { text: "On time", cls: "bg-green-100 text-green-800" };
+  }
+
+  if (dm >= 10) return { text: `Delayed ${dm}m`, cls: "bg-red-100 text-red-800" };
   if (dm <= -10) return { text: `Early ${Math.abs(dm)}m`, cls: "bg-green-100 text-green-800" };
   return { text: "On time", cls: "bg-green-100 text-green-800" };
 }
@@ -162,6 +167,21 @@ function rowEmphasis(item) {
   if (s.includes("cancel")) return "border-red-400 bg-red-50";
   if (s.includes("landed") || s.includes("arrived")) return "border-green-100";
   return "border-gray-200";
+}
+function saneEta(schedISO, estISO) {
+  const sched = new Date(schedISO).getTime();
+  const est = new Date(estISO).getTime();
+  if (!Number.isFinite(est)) return null;
+
+  const diff = est - sched; // ms
+
+  // Trust live ETA only if:
+  // 1) within ±3h of scheduled, and
+  // 2) we are within 12h of the scheduled arrival window
+  const within3h = Math.abs(diff) <= 3 * 60 * 60 * 1000;
+  const nearEvent = Math.abs(Date.now() - sched) <= 12 * 60 * 60 * 1000;
+
+  return within3h && nearEvent ? estISO : null;
 }
 // ======== UI ========
 function StatusPill({ text }) {
@@ -248,7 +268,11 @@ export default function App() {
         const live = await fetchStatusForRow(r);
         if (!live) return r;
 
-        let eta = live.eta_est || r.eta_sched;
+        let eta = r.eta_sched;
+          if (live?.eta_est) {
+            const ok = saneEta(r.eta_sched, live.eta_est);
+            if (ok) eta = ok;
+          }
         const estTime = new Date(eta).getTime();
         const schedTime = new Date(r.eta_sched).getTime();
 
