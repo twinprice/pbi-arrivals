@@ -298,12 +298,9 @@ function LogoImg({ iata, className = "h-5 w-auto" }) {
   return <img src={srcs[i]} alt="" className={className} onError={() => setI(i + 1)} />;
 }
 
-function PlayerImg({ name, className = "w-12 h-12 rounded-xl object-cover bg-gray-100 hidden sm:block" }) {
+function PlayerImg({ name, className }) {
   const stem = playerPhotoPath(name);
-  const srcs = [`${stem}.webp`, `${stem}.jpg`, `${stem}.jpeg`, `${stem}.png`];
-  const [i, setI] = useState(0);
-  if (i >= srcs.length) return null;
-  return <img src={srcs[i]} alt="" className={className} onError={() => setI(i + 1)} />;
+  return <img src={`${stem}.webp`} alt="" className={className} />;
 }
 
 // ======== UI ========
