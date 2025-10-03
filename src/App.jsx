@@ -186,8 +186,8 @@ function saneEta(schedISO, estISO) {
 // ======== UI ========
 function StatusPill({ text }) {
   return (
-    <span className={`px-2 py-1 rounded-full text-xs font-medium ${badgeColor(text)}`}>
-      {text || "Unknown"}
+    <span className={`px-2 py-1 rounded-full text-xs font-medium ${badgeColor(item.status)}`}>
+      {(item.status || "Scheduled")}
     </span>
   );
 }
@@ -238,7 +238,7 @@ function RowCard({ item, onOpenExternal }) {
   );
 }
 export default function App() {
-  const [rows, setRows] = useState(RAW);
+ const [rows, setRows] = useState(RAW.map(r => ({ ...r, status: r.status || "Scheduled" })));
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
   const [pickup, setPickup] = useState("ALL");
@@ -266,7 +266,9 @@ export default function App() {
     const updated = await Promise.all(
       rows.map(async (r) => {
         const live = await fetchStatusForRow(r);
-        if (!live) return r;
+         if (!live) return r;                 // keep previous status, which we seeded to "Scheduled"
+          if (!live.status && r.status) live.status = r.status;  // preserve last known status
+
 
         let eta = r.eta_sched;
           if (live?.eta_est) {
