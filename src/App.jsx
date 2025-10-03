@@ -16,7 +16,10 @@ const CONFIG = {
   AMTRAK_PROXY_URL: "",
 };
 // Correct base for GitHub Pages
-const BASE = (import.meta && import.meta.env && import.meta.env.BASE_URL) ? import.meta.env.BASE_URL : "/";
+const BASE =
+  (typeof import !== "undefined" && typeof import.meta !== "undefined" && import.meta.env && import.meta.env.BASE_URL)
+    ? import.meta.env.BASE_URL
+    : "/pbi-arrivals/";
 
 // ======== DATA ========
 // Optional "photo" lets you point to a headshot. If absent, we try players/<slug>.jpg.
@@ -234,7 +237,6 @@ async function fetchStatusForRow(row) {
   }
   return null;
 }
-import { useState } from "react";
 
 function LogoImg({ iata, className = "h-5 w-auto" }) {
   if (!iata) return null;
@@ -445,6 +447,13 @@ export default function App() {
           <div className="flex items-center gap-2">
             <button onClick={refresh} className="px-3 py-2 rounded-xl bg-black text-white text-sm disabled:opacity-50" disabled={loading}>
               {loading ? "Refreshing" : "Refresh"}
+            </button>
+            <button
+              onClick={() => { localStorage.removeItem("flightCacheV1"); }}
+              className="px-3 py-2 rounded-xl border text-sm"
+              disabled={loading}
+            >
+              Clear cache
             </button>
             <span className="text-xs text-gray-500">Updated {timeAgo(lastRefreshed.current)}</span>
           </div>
