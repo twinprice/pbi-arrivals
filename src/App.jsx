@@ -1,19 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
-// PBI Live Arrivals Board – single file React app
-// Hosting: drop this into any Vite/Next/CRA project or a standalone React runner.
-// Styling: TailwindCSS assumed. If you do not use Tailwind, replace the classNames with your CSS.
-// Timezone: shows all times in America/New_York.
-// Refresh: auto refresh every 60 seconds; manual refresh button included.
+/**
+ * PBI Live Arrivals Board
+ * Single file React component for Vite.
+ * Times shown in America/New_York.
+ * Auto refresh every 60 seconds.
+ */
 
-// ======== CONFIG ========
 const CONFIG = {
   TZ: "America/New_York",
   AUTO_REFRESH_SECONDS: 60,
   AVIATIONSTACK_KEY: "16ccb25a465d814f00f5a4b82d0c9455",
   USE_AVIATIONSTACK: true,
   AERODATABOX_KEY: "",
-  AMTRAK_PROXY_URL: "",
+  AMTRAK_PROXY_URL: "", // optional Apps Script proxy if you wire up train status later
 };
 
 // ======== DATA ========
@@ -24,9 +24,11 @@ const RAW = [
   { id: "DL5738-4", type: "flight", display_name: "Lucie Stefanoni", origin_city: "Boston", airline_code: "DL", flight_number: "5738", eta_sched: "2025-10-03T11:02:00-04:00", pickup: "MH/Bill" },
   { id: "DL5738-5", type: "flight", display_name: "Ocean Ma", origin_city: "Boston", airline_code: "DL", flight_number: "5738", eta_sched: "2025-10-03T11:02:00-04:00", pickup: "MH/Bill" },
   { id: "DL5738-6", type: "flight", display_name: "Molly Stoltz", origin_city: "Boston", airline_code: "DL", flight_number: "5738", eta_sched: "2025-10-03T11:02:00-04:00", pickup: "MH/Bill" },
+
   { id: "DL5302-1", type: "flight", display_name: "Shaurya Bawa", origin_city: "NYC - LaGuardia", airline_code: "DL", flight_number: "5302", eta_sched: "2025-10-03T12:20:00-04:00", pickup: "TED" },
   { id: "DL5302-2", type: "flight", display_name: "Nourin Hesham Kamaleldin Khalifa", origin_city: "NYC - LaGuardia", airline_code: "DL", flight_number: "5302", eta_sched: "2025-10-03T12:20:00-04:00", pickup: "TED" },
   { id: "DL5302-3", type: "flight", display_name: "Ghiorghisor Andreea-Denisa", origin_city: "Ithaca", airline_code: "DL", flight_number: "5302", eta_sched: "2025-10-03T12:20:00-04:00", pickup: "TED" },
+
   { id: "AA1071-1", type: "flight", display_name: "Joachim Chuah Han Wen", origin_city: "Hartford", airline_code: "AA", flight_number: "1071", eta_sched: "2025-10-03T13:10:00-04:00", pickup: "MH/Carol" },
   { id: "AA1071-2", type: "flight", display_name: "Benedek Takacs", origin_city: "Hartford", airline_code: "AA", flight_number: "1071", eta_sched: "2025-10-03T13:10:00-04:00", pickup: "MH/Carol" },
   { id: "AA1071-3", type: "flight", display_name: "Low Wa Sern", origin_city: "Hartford", airline_code: "AA", flight_number: "1071", eta_sched: "2025-10-03T13:10:00-04:00", pickup: "MH/Carol" },
@@ -45,8 +47,8 @@ const RAW = [
   { id: "AT79-8", type: "train", display_name: "Savannah Ingledew", origin_city: "Philadelphia", train_number: "79", eta_sched: "2025-10-03T13:27:00-04:00", pickup: "Eliza" },
   { id: "AT79-9", type: "train", display_name: "Anne Siobhan Leakey", origin_city: "Philadelphia", train_number: "79", eta_sched: "2025-10-03T13:27:00-04:00", pickup: "Eliza" },
 
-  { id: "AT195-1", type: "train", display_name: "Rustin Wiser", origin_city: "Philadelphia", train_number: "195", eta_sched: "2025-10-03T16:58:00-04:00", pickup: "MH" }
-]
+  { id: "AT195-1", type: "train", display_name: "Rustin Wiser", origin_city: "Philadelphia", train_number: "195", eta_sched: "2025-10-03T16:58:00-04:00", pickup: "MH" },
+];
 
 // ======== UTIL ========
 function fmtTime(dtStr, tz = CONFIG.TZ) {
@@ -61,8 +63,7 @@ function fmtTime(dtStr, tz = CONFIG.TZ) {
 function minsUntil(dtStr) {
   const now = Date.now();
   const t = new Date(dtStr).getTime();
-  const diffMin = Math.round((t - now) / 60000);
-  return diffMin;
+  return Math.round((t - now) / 60000);
 }
 
 function badgeColor(status) {
@@ -79,23 +80,48 @@ function badgeColor(status) {
 async function fetchFlightStatusAviationstack(airlineIata, flightNumber, schedISO) {
   if (!CONFIG.AVIATIONSTACK_KEY) return null;
 
+  // build flight_date as YYYY-MM-DD using the scheduled local date
   const d = new Date(schedISO);
   const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
   const flightDate = `${yyyy}-${mm}-${dd}`;
 
-  const url = `https://api.aviationstack.com/v1/flights?access_key=${CONFIG.AVIATIONSTACK_KEY}&flight_iata=${airlineIata}${flightNumber}&flight_date=${flightDate}`;
+  const url =
+    `https://api.aviationstack.com/v1/flights?` +
+    `access_key=${CONFIG.AVIATIONSTACK_KEY}` +
+    `&flight_iata=${airlineIata}${flightNumber}` +
+    `&flight_date=${flightDate}`;
+
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error("aviationstack http error");
     const data = await res.json();
     const item = data?.data?.[0];
     if (!item) return null;
-    const stat = item.flight_status;
+
+    const stat = item.flight_status; // scheduled, active, landed, cancelled
     const arr = item.arrival || {};
-    const est = arr.estimated || arr.estimated_runway || arr.scheduled || null;
+    const est =
+      arr.estimated ||
+      arr.estimated_runway ||
+      arr.scheduled ||
+      null;
+
     return { status: stat, eta_est: est };
+  } catch (e) {
+    console.error(e);
+    return null;
+  }
+}
+
+async function fetchTrainStatus(trainNumber) {
+  if (!CONFIG.AMTRAK_PROXY_URL) return null;
+  try {
+    const res = await fetch(`${CONFIG.AMTRAK_PROXY_URL}?train=${encodeURIComponent(trainNumber)}`);
+    if (!res.ok) throw new Error("amtrak proxy http error");
+    const data = await res.json();
+    return { status: data.status, eta_est: data.eta_est };
   } catch (e) {
     console.error(e);
     return null;
@@ -105,6 +131,9 @@ async function fetchFlightStatusAviationstack(airlineIata, flightNumber, schedIS
 async function fetchStatusForRow(row) {
   if (row.type === "flight") {
     return fetchFlightStatusAviationstack(row.airline_code, row.flight_number, row.eta_sched);
+  }
+  if (row.type === "train") {
+    return fetchTrainStatus(row.train_number);
   }
   return null;
 }
@@ -118,8 +147,10 @@ function StatusPill({ text }) {
   );
 }
 
-function RowCard({ item }) {
+function RowCard({ item, onOpenExternal }) {
   const mins = minsUntil(item.eta_live || item.eta_sched);
+  const showMinutes = Number.isFinite(mins) && Math.abs(mins) <= 600; // hide absurd numbers
+
   return (
     <div className="bg-white rounded-2xl shadow p-4 flex items-center gap-4">
       <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-xl">
@@ -131,14 +162,14 @@ function RowCard({ item }) {
           <StatusPill text={item.status} />
         </div>
         <div className="text-sm text-gray-600">
-          {item.airline_code}{item.flight_number} • From {item.origin_city}
+          {item.type === "flight" ? `${item.airline_code}${item.flight_number}` : `Train ${item.train_number}`} • From {item.origin_city}
         </div>
         <div className="text-sm mt-1">
           ETA scheduled: <span className="font-medium">{fmtTime(item.eta_sched)}</span>
           {item.eta_live && <span className="ml-2">Live: <span className="font-medium">{fmtTime(item.eta_live)}</span></span>}
-          {Number.isFinite(mins) && (
+          {showMinutes && (
             <span className={`ml-2 ${mins < 0 ? "text-gray-500" : mins <= 20 ? "text-red-600" : "text-gray-800"}`}>
-              {Math.abs(mins) > 600 ? '' : mins < 0 ? `${Math.abs(mins)} min ago` : `in ${mins} min`}
+              {mins < 0 ? `${Math.abs(mins)} min ago` : `in ${mins} min`}
             </span>
           )}
         </div>
@@ -146,6 +177,11 @@ function RowCard({ item }) {
       </div>
       <div className="text-right">
         <div className="text-sm">Pickup: <span className="font-medium">{item.pickup}</span></div>
+        {item.type === "train" && (
+          <button onClick={() => onOpenExternal(item)} className="mt-2 text-xs underline text-blue-700">
+            Open train status
+          </button>
+        )}
       </div>
     </div>
   );
@@ -154,7 +190,26 @@ function RowCard({ item }) {
 export default function App() {
   const [rows, setRows] = useState(RAW);
   const [loading, setLoading] = useState(false);
+  const [query, setQuery] = useState("");
+  const [pickup, setPickup] = useState("ALL");
+  const [onlyActive, setOnlyActive] = useState(false);
   const lastRefreshed = useRef(Date.now());
+
+  const uniquePickups = useMemo(() => ["ALL", ...Array.from(new Set(RAW.map(r => r.pickup)))], []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return rows.filter((r) => {
+      const matchesQ =
+        !q ||
+        `${r.display_name} ${r.origin_city} ${r.pickup} ${r.airline_code || ""}${r.flight_number || ""} ${r.train_number || ""}`
+          .toLowerCase()
+          .includes(q);
+      const matchesPickup = pickup === "ALL" || r.pickup.toLowerCase().includes(pickup.toLowerCase());
+      const isActive = !onlyActive || !r.status || /active|en route|landed|arrived|delayed|late|boarding/i.test(r.status);
+      return matchesQ && matchesPickup && isActive;
+    });
+  }, [rows, query, pickup, onlyActive]);
 
   async function refresh() {
     setLoading(true);
@@ -166,12 +221,17 @@ export default function App() {
         let eta = live.eta_est || r.eta_sched;
         const estTime = new Date(eta).getTime();
         const schedTime = new Date(r.eta_sched).getTime();
+
+        // discard estimates more than 24h away from scheduled
         if (!Number.isFinite(estTime) || Math.abs(estTime - schedTime) > 24 * 60 * 60 * 1000) {
           eta = r.eta_sched;
         }
 
-        const statusNorm = normalizeStatus(live?.status, r.type);
-        const finalStatus = statusNorm === 'Landed' && new Date(eta).getTime() > Date.now() ? 'En route' : statusNorm;
+        const statusNorm = normalizeStatus(live.status, r.type);
+        const finalStatus =
+          statusNorm === "Landed" && new Date(eta).getTime() > Date.now()
+            ? "En route"
+            : statusNorm;
 
         return { ...r, status: finalStatus, eta_live: eta };
       })
@@ -185,17 +245,24 @@ export default function App() {
     refresh();
     const id = setInterval(refresh, CONFIG.AUTO_REFRESH_SECONDS * 1000);
     return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function normalizeStatus(status, type) {
     if (!status) return "Scheduled";
     const s = String(status).toLowerCase();
     if (/(landed|arrived)/.test(s)) return type === "flight" ? "Landed" : "Arrived";
-    if (/(active|en route|in air)/.test(s)) return "En route";
+    if (/(active|en route|enroute|in air)/.test(s)) return "En route";
     if (/(cancel)/.test(s)) return "Cancelled";
     if (/(delay|late)/.test(s)) return "Delayed";
-    if (/(boarding)/.test(s)) return "Boarding";
+    if (/(boarding|origin)/.test(s)) return "Boarding";
     return "Scheduled";
+  }
+
+  function onOpenExternal(item) {
+    if (item.type !== "train") return;
+    const url = `https://www.amtrak.com/track-your-train.html`;
+    window.open(url, "_blank");
   }
 
   return (
@@ -221,12 +288,30 @@ export default function App() {
           </div>
         </header>
 
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+          <input
+            placeholder="Search name, flight, train, city, pickup"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="md:col-span-2 w-full px-3 py-2 rounded-xl border border-gray-300 focus:outline-none"
+          />
+          <select value={pickup} onChange={(e) => setPickup(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-gray-300">
+            {uniquePickups.map((p) => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={onlyActive} onChange={(e) => setOnlyActive(e.target.checked)} />
+            Only active
+          </label>
+        </div>
+
         <div className="space-y-3">
-          {rows
+          {filtered
             .slice()
-            .sort((a, b) => new Date(a.eta_live || a.eta_sched).getTime() - new Date(b.eta_live || b.eta_sched).getTime())
+            .sort((a, b) => new Date(a.eta_live || a.eta_sched) - new Date(b.eta_live || b.eta_sched))
             .map((row) => (
-              <RowCard key={row.id} item={row} />
+              <RowCard key={row.id} item={row} onOpenExternal={onOpenExternal} />
             ))}
         </div>
       </div>
