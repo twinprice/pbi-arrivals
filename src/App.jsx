@@ -14,7 +14,7 @@ const CONFIG = {
   USE_AVIATIONSTACK: true,
   AERODATABOX_KEY: "",
   AMTRAK_PROXY_URL: "",
-  AVIATIONSTACK_PROXY_URL: "https://script.google.com/macros/s/AKfycbyEYs5fvoxW7k6ZEbsJDzhHhRtbgrfmHmA7XuZDFt64HaihKwAYBmOFXeh8zqjSEnwq/exec",
+  AVIATIONSTACK_PROXY_URL: "https://script.google.com/macros/s/AKfycbz7mF2UmyBTv6qkriJgpyaEiuFs3sJqdVqw1yu6GrPhvQrpWYEMHYC_87wRro6EpYg5/exec",
 
 };
 // Safe base for GitHub Pages project site
@@ -154,52 +154,28 @@ function writeCache(obj) {
 async function fetchFlightStatusAviationstack(airlineIata, flightNumber, schedISO) {
   const d = new Date(schedISO);
   const flightDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  const iata = `${airlineIata}${flightNumber}`;
+  const flight = `${airlineIata}${flightNumber}`;
 
-  // cache key unchanged...
-  // use proxy
-  const url = `${CONFIG.AVIATIONSTACK_PROXY_URL}?flight=${encodeURIComponent(iata)}&date=${encodeURIComponent(flightDate)}`;
+  const hit = readFromCacheIfFresh(flight, flightDate); // your existing cache logic
+  if (hit) return hit;
+
+  const base = CONFIG.AVIATIONSTACK_PROXY_URL
+    ? CONFIG.AVIATIONSTACK_PROXY_URL
+    : `https://api.aviationstack.com/v1/flights?access_key=${CONFIG.AVIATIONSTACK_KEY}`;
+  const url = CONFIG.AVIATIONSTACK_PROXY_URL
+    ? `${base}?flight=${encodeURIComponent(flight)}&date=${encodeURIComponent(flightDate)}`
+    : `${base}&flight_iata=${encodeURIComponent(flight)}&flight_date=${encodeURIComponent(flightDate)}`;
 
   const res = await fetch(url);
-  if (!res.ok) return null;
+  if (!res.ok) throw new Error('flight fetch failed');
   const data = await res.json();
-  const item = data?.data?.[0];
-  if (!item) return null;
 
-  const dep = item.departure || {};
-  const arr = item.arrival || {};
-  const airline = item.airline || {};
-  const aircraft = item.aircraft || {};
-  const etaEst = arr.estimated || arr.estimated_runway || arr.scheduled || null;
-
-  return {
-    status: item.flight_status,
-    eta_est: etaEst,
-    dep_scheduled: dep.scheduled || null,
-    dep_estimated: dep.estimated || null,
-    dep_actual: dep.actual || null,
-    dep_delay_min: Number.isFinite(dep.delay) ? dep.delay : null,
-    arr_terminal: arr.terminal || null,
-    arr_gate: arr.gate || null,
-    arr_baggage: arr.baggage || null,
-    airline_name: airline.name || null,
-    aircraft_reg: aircraft.registration || null,
-    flight_iata: item.flight?.iata || iata,
-  };
+  // If proxy in use we already normalized the shape above
+  const payload = CONFIG.AVIATIONSTACK_PROXY_URL ? data : normalizeAviationstackJson(data);
+  writeCacheFor(flight, flightDate, payload);
+  return payload;
 }
 
-async function fetchTrainStatus(trainNumber) {
-  if (!CONFIG.AMTRAK_PROXY_URL) return null;
-  try {
-    const res = await fetch(`${CONFIG.AMTRAK_PROXY_URL}?train=${encodeURIComponent(trainNumber)}`);
-    if (!res.ok) throw new Error("amtrak proxy http error");
-    const data = await res.json();
-    return { status: data.status, eta_est: data.eta_est };
-  } catch (e) {
-    console.error(e);
-    return null;
-  }
-}
 
 async function fetchStatusForRow(row) {
   if (row.type === "flight") {
