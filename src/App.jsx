@@ -8,17 +8,15 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 
 const CONFIG = {
   TZ: "America/New_York",
-  AUTO_REFRESH_SECONDS: 180,
-  CACHE_SECONDS: 180,
+  AUTO_REFRESH_SECONDS: 180,            // 3 minutes
+  CACHE_SECONDS: 180,                   // cache live lookups for 3 minutes
   AVIATIONSTACK_KEY: "16ccb25a465d814f00f5a4b82d0c9455",
   USE_AVIATIONSTACK: true,
   AERODATABOX_KEY: "",
   AMTRAK_PROXY_URL: "",
-  AVIATIONSTACK_PROXY_URL: "", // <= IMPORTANT: disable proxy
-};
+  AVIATIONSTACK_PROXY_URL: "",          // leave empty while we debug
+}; // ← exactly one closing brace here, no extra characters
 
-
-};
 // Safe base for GitHub Pages project site
 const BASE =
   (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.BASE_URL)
