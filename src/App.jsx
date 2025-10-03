@@ -335,17 +335,15 @@ function RowCard({ item, onOpenExternal }) {
   const showMinutes = Number.isFinite(mins) && Math.abs(mins) <= 600;
   const punctual = punctualLabel(item);
 
-  const depTime = item.dep_estimated || item.dep_scheduled; // show estimated if present
-  const etaLive = item.eta_live || item.eta_sched;          // ← keep only this declaration
-  const dm = delayMinutes(item);                             // positive late, negative early
-  const source = etaSource(item);                            // "actual" | "est" | "sched"
+  const depTime = item.dep_estimated || item.dep_scheduled;
+  const etaLive = item.eta_live || item.eta_sched;
+  const dm = delayMinutes(item);
+  const source = etaSource(item);
 
   return (
     <div className={`rounded-2xl shadow p-4 flex items-center gap-4 border ${rowEmphasis(item)}`}>
-      {/* player photo */}
       <PlayerImg name={item.display_name} className="w-12 h-12 rounded-xl object-cover bg-gray-100 hidden sm:block" />
 
-      {/* emoji icon only on small screens */}
       <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-xl sm:hidden">
         {item.type === "flight" ? "✈️" : "🚆"}
       </div>
@@ -362,7 +360,6 @@ function RowCard({ item, onOpenExternal }) {
           {item.type === "flight" ? `${item.airline_code}${item.flight_number}` : `Train ${item.train_number}`} • From {item.origin_city}
         </div>
 
-        {/* >>> replaced time row with source badge <<< */}
         <div className="text-sm mt-1">
           {depTime && (
             <span className="mr-3">
@@ -384,17 +381,35 @@ function RowCard({ item, onOpenExternal }) {
         </div>
 
         <div className="text-xs text-gray-600 mt-1 flex flex-wrap gap-x-4 gap-y-1">
-          {Number.isFinite(dm) && Math.abs(dm) <= 180 && <span>Arr delta: <span className="font-medium">{dm >= 0 ? `+${dm}m` : `${dm}m`}</span></span>}
-          {(item.arr_terminal || item.arr_gate) && <span>Gate: <span className="font-medium">{[item.arr_terminal, item.arr_gate].filter(Boolean).join(" ")}</span></span>}
-          {item.arr_baggage && <span>Baggage: <span className="font-medium">{item.arr_baggage}</span></span>}
-          {item.aircraft_reg && <span>Reg: <span className="font-medium">{item.aircraft_reg}</span></span>}
+          {Number.isFinite(dm) && Math.abs(dm) <= 180 && (
+            <span>
+              Arr delta: <span className="font-medium">{dm >= 0 ? `+${dm}m` : `${dm}m`}</span>
+            </span>
+          )}
+          {(item.arr_terminal || item.arr_gate) && (
+            <span>
+              Gate: <span className="font-medium">{[item.arr_terminal, item.arr_gate].filter(Boolean).join(" ")}</span>
+            </span>
+          )}
+          {item.arr_baggage && (
+            <span>
+              Baggage: <span className="font-medium">{item.arr_baggage}</span>
+            </span>
+          )}
+          {item.aircraft_reg && (
+            <span>
+              Reg: <span className="font-medium">{item.aircraft_reg}</span>
+            </span>
+          )}
         </div>
 
         {item.notes && <div className="text-xs text-gray-500 mt-1">{item.notes}</div>}
       </div>
 
       <div className="text-right">
-        <div className="text-sm">Pickup: <span className="font-medium">{item.pickup}</span></div>
+        <div className="text-sm">
+          Pickup: <span className="font-medium">{item.pickup}</span>
+        </div>
         {item.type === "train" && (
           <button onClick={() => onOpenExternal(item)} className="mt-2 text-xs underline text-blue-700">
             Open train status
@@ -404,6 +419,7 @@ function RowCard({ item, onOpenExternal }) {
     </div>
   );
 }
+
 
 
 
