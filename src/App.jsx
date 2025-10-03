@@ -336,14 +336,13 @@ function RowCard({ item, onOpenExternal }) {
   const punctual = punctualLabel(item);
 
   const depTime = item.dep_estimated || item.dep_scheduled; // show estimated if present
-  const etaLive = item.eta_live || item.eta_sched;
-  const dm = delayMinutes(item); // positive late, negative early
-  const etaLive = item.eta_live || item.eta_sched;
-  const source = etaSource(item);   // ← add this
+  const etaLive = item.eta_live || item.eta_sched;          // ← keep only this declaration
+  const dm = delayMinutes(item);                             // positive late, negative early
+  const source = etaSource(item);                            // "actual" | "est" | "sched"
 
   return (
     <div className={`rounded-2xl shadow p-4 flex items-center gap-4 border ${rowEmphasis(item)}`}>
-      {/* player photo with extension fallbacks and correct base path */}
+      {/* player photo */}
       <PlayerImg name={item.display_name} className="w-12 h-12 rounded-xl object-cover bg-gray-100 hidden sm:block" />
 
       {/* emoji icon only on small screens */}
@@ -353,7 +352,6 @@ function RowCard({ item, onOpenExternal }) {
 
       <div className="flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          {/* airline logo with extension fallbacks and correct base path */}
           <LogoImg iata={item.airline_code} className="h-5 w-auto" />
           <div className="text-lg font-semibold">{item.display_name}</div>
           <StatusPill text={item.status} />
@@ -363,30 +361,50 @@ function RowCard({ item, onOpenExternal }) {
         <div className="text-sm text-gray-600">
           {item.type === "flight" ? `${item.airline_code}${item.flight_number}` : `Train ${item.train_number}`} • From {item.origin_city}
         </div>
+
+        {/* >>> replaced time row with source badge <<< */}
         <div className="text-sm mt-1">
           {depTime && (
             <span className="mr-3">
               Departs: <span className="font-medium">{fmtHM(depTime)}</span>
             </span>
           )}
-        
           <span className="mr-3">
             ETA scheduled: <span className="font-medium">{fmtHM(item.eta_sched)}</span>
           </span>
-        
           <span className="mr-3">
             Live: <span className="font-medium">{fmtHM(etaLive)}</span>
-            <span className="ml-1 px-2 py-0.5 text-xs rounded-full bg-gray-200 align-middle">
-              {etaSource(item)}
-            </span>
+            <span className="ml-1 px-2 py-0.5 text-xs rounded-full bg-gray-200 align-middle">{source}</span>
           </span>
-        
           {showMinutes && (
             <span className={`${mins < 0 ? "text-gray-500" : mins <= 20 ? "text-red-600" : "text-gray-800"}`}>
               {mins < 0 ? `${Math.abs(mins)} min ago` : `in ${mins} min`}
             </span>
           )}
-</div>
+        </div>
+
+        <div className="text-xs text-gray-600 mt-1 flex flex-wrap gap-x-4 gap-y-1">
+          {Number.isFinite(dm) && Math.abs(dm) <= 180 && <span>Arr delta: <span className="font-medium">{dm >= 0 ? `+${dm}m` : `${dm}m`}</span></span>}
+          {(item.arr_terminal || item.arr_gate) && <span>Gate: <span className="font-medium">{[item.arr_terminal, item.arr_gate].filter(Boolean).join(" ")}</span></span>}
+          {item.arr_baggage && <span>Baggage: <span className="font-medium">{item.arr_baggage}</span></span>}
+          {item.aircraft_reg && <span>Reg: <span className="font-medium">{item.aircraft_reg}</span></span>}
+        </div>
+
+        {item.notes && <div className="text-xs text-gray-500 mt-1">{item.notes}</div>}
+      </div>
+
+      <div className="text-right">
+        <div className="text-sm">Pickup: <span className="font-medium">{item.pickup}</span></div>
+        {item.type === "train" && (
+          <button onClick={() => onOpenExternal(item)} className="mt-2 text-xs underline text-blue-700">
+            Open train status
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 
 
         <div className="text-xs text-gray-600 mt-1 flex flex-wrap gap-x-4 gap-y-1">
