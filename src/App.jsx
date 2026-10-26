@@ -10,8 +10,8 @@ const CONFIG = {
   TZ: "America/New_York",
   AUTO_REFRESH_SECONDS: 180,            // 3 minutes
   CACHE_SECONDS: 180,                   // cache live lookups for 3 minutes
-  AVIATIONSTACK_KEY: "16ccb25a465d814f00f5a4b82d0c9455",
-  USE_AVIATIONSTACK: true,
+  AVIATIONSTACK_KEY: (import.meta.env && import.meta.env.VITE_AVIATIONSTACK_KEY) || "",  // set at build time; never commit the key
+  USE_AVIATIONSTACK: !!(import.meta.env && import.meta.env.VITE_AVIATIONSTACK_KEY),
   AERODATABOX_KEY: "",
   AMTRAK_PROXY_URL: "",
   AVIATIONSTACK_PROXY_URL: "",          // leave empty while we debug
